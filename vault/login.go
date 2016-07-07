@@ -29,26 +29,28 @@ type loginResponse struct {
 			UserID string `json:"user-id"`
 		} `json:"metadata"`
 	} `json:"auth"`
+	Errors []string `json:"errors"`
 }
 
 func (l *Login) NewRequest(c *restclient.Config, a, u string) (err error) {
-	o := restclient.NewPostOperation().WithPath("/v1/auth/app-id/login").WithResponseTarget(l).WithSendDataString(fmt.Sprintf(`
+	d := fmt.Sprintf(`
 			{
-				"app_id":"%s",
-				"user_id": "%s"}
-			}`, a, u)).WithResponseTarget(&l)
+				"app_id": "%s",
+				"user_id": "%s"
+			}`, a, u)
+	o := restclient.NewPostOperation().WithPath("/v1/auth/app-id/login").WithResponseTarget(l).WithBodyDataString(d)
 	req, err := restclient.BuildRequest(c, o)
 	l.request = req
 	return
 }
 
-func (l *Login) Process() (err error) {
+func (l *Login) process() (err error) {
 	httpCode, err := restclient.Send(l.request)
 	if err != nil {
 		return
 	}
 	if *httpCode != http.StatusOK {
-		err = errors.New("Did not get an HTTP 200 code on login")
+		err = errors.New(fmt.Sprintf("Did not get an HTTP 200 code on login, got %v with message: %v", *httpCode, l.Errors))
 	}
 	if l.loginResponse.Auth.LeaseDuration > 0 {
 		l.validUntil = time.Now().Add(time.Duration(l.loginResponse.Auth.LeaseDuration) * time.Second)
@@ -59,11 +61,21 @@ func (l *Login) Process() (err error) {
 func (l *Login) GetToken() (token string, err error) {
 	// If token no longer valid re-request it first. A zero value for ValidUntil means it never expires
 	if !l.validUntil.IsZero() && time.Now().After(l.validUntil) {
-		err = l.Process()
+		err = l.process()
+		if err != nil {
+			return
+		}
+	}
+	//First time login
+	if l.Auth.ClientToken == "" {
+		err = l.process()
 		if err != nil {
 			return
 		}
 	}
 	token = l.Auth.ClientToken
+	if token == "" {
+		err = errors.New("Vault client token is blank")
+	}
 	return
 }

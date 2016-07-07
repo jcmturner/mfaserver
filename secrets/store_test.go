@@ -31,7 +31,7 @@ func TestStore(t *testing.T) {
 	conf, ln := mockVault(t)
 	defer ln.Close()
 
-	if ok := Store(&conf.Vault, testMFAUser, testMFARef, testMFASecret); !ok {
+	if err := Store(conf, testMFAUser, testMFARef, testMFASecret); err != nil {
 		t.Fatalf("Error when storing secret")
 	}
 }
@@ -40,10 +40,10 @@ func TestStoreAndRead(t *testing.T) {
 	conf, ln := mockVault(t)
 	defer ln.Close()
 
-	if ok := Store(&conf.Vault, testMFAUser, testMFARef, testMFASecret); !ok {
+	if err := Store(conf, testMFAUser, testMFARef, testMFASecret); err != nil {
 		t.Fatalf("Error when storing secret")
 	}
-	m, err := Read(&conf.Vault, testMFAUser)
+	m, err := Read(conf, testMFAUser)
 	if err != nil {
 		t.Errorf("Could not read secret back from vault: %v", err)
 	}

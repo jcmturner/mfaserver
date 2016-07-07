@@ -13,15 +13,15 @@ import (
 type validateRequestData struct {
 	Domain   string `json:"domain"`
 	Username string `json:"username"`
-	OTP      int    `json:"otp"`
+	OTP      string `json:"otp"`
 }
 
 func checkOTP(c *config.Config, data *validateRequestData) (bool, error) {
-	m, err := secrets.Read(&c.Vault, data.Domain+"/"+data.Username)
+	m, err := secrets.Read(c, "/"+data.Domain+"/"+data.Username)
 	if err != nil {
 		return false, err
 	}
-	s := m["mfa"]
+	s := m["mfa"].(string)
 	generatedOTP, _, err := gootp.GetTOTPNow(s, sha1.New, 6)
 	if err != nil {
 		return false, err
@@ -42,25 +42,29 @@ func ValidateOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	dec = json.NewDecoder(io.LimitReader(r.Body, 1024))
 	err := dec.Decode(&data)
 	if err != nil {
-		//TODO put logging here of the error.
 		//We should fail safe
+		c.MFAServer.Loggers.Error.Printf("%s, Could not parse data posted from client : %v", r.RemoteAddr, err)
 		w.WriteHeader(http.StatusUnauthorized)
 	}
-	if data.Domain == "" || data.Username == "" || data.OTP == 0 {
+	if data.Domain == "" || data.Username == "" || data.OTP == "" {
+		c.MFAServer.Loggers.Warning.Printf("%s, Could not extract values correctly from the validation request.", r.RemoteAddr)
 		w.WriteHeader(http.StatusBadRequest)
 	}
+	c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation request received for %s/%s '%s'", r.RemoteAddr, data.Domain, data.Username, data.OTP)
 
 	//Check the OTP value provided
 	ok, err := checkOTP(c, &data)
 	if err != nil {
-		//TODO put logging here of the error.
 		//We should fail safe
+		c.MFAServer.Loggers.Error.Printf("%s, Error during the validation of OTP for %s/%s : %v", r.RemoteAddr, data.Domain, data.Username, err)
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 	if ok {
+		c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation passed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
 		//Respond with a 201 to indicate the check passed
 		w.WriteHeader(http.StatusNoContent)
 	} else {
+		c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation failed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 }

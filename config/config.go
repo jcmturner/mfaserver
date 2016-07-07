@@ -10,10 +10,15 @@ import (
 	vaultAPI "github.com/hashicorp/vault/api"
 	"github.com/jcmturner/mfaserver/vault"
 	"github.com/jcmturner/restclient"
+	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
+	"os"
 )
+
+var validLogLevels = []string{"ERROR", "WARNING", "INFO", "DEBUG"}
 
 type Config struct {
 	Vault     VaultConf `json:"Vault"`
@@ -39,6 +44,9 @@ type UserIdFile struct {
 type MFAServer struct {
 	ListenerSocket *string `json:"ListenerSocket"`
 	TLS            TLS     `json:"TLS"`
+	LogFilePath    *string `json:"LogFile"`
+	LogLevel       *string `json:"LogLevel"`
+	Loggers        *Loggers
 }
 
 type TLS struct {
@@ -47,9 +55,17 @@ type TLS struct {
 	KeyFile         *string `json:"KeyFile"`
 }
 
+type Loggers struct {
+	Debug   *log.Logger
+	Info    *log.Logger
+	Warning *log.Logger
+	Error   *log.Logger
+}
+
 func NewConfig() *Config {
 	defSecPath := "secrets/mfa"
 	defSocket := "0.0.0.0:8443"
+	dl := log.New(ioutil.Discard, "", os.O_APPEND)
 	return &Config{
 		Vault: VaultConf{
 			VaultReSTClientConfig: restclient.NewConfig(),
@@ -58,7 +74,43 @@ func NewConfig() *Config {
 		},
 		MFAServer: MFAServer{
 			ListenerSocket: &defSocket,
+			Loggers: &Loggers{
+				Debug:   dl,
+				Info:    dl,
+				Warning: dl,
+				Error:   dl,
+			},
 		},
+	}
+}
+
+func loggerSetUp(c *Config) error {
+	var logfile io.Writer
+	if c.MFAServer.LogFilePath != nil {
+		var err error
+		logfile, err = os.OpenFile(*c.MFAServer.LogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0664)
+		if err != nil {
+			return err
+		}
+	} else {
+		logfile = os.Stdout
+	}
+	c.MFAServer.Loggers.Error = log.New(logfile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+	if c.MFAServer.LogLevel != nil && isValidLogLevel(*c.MFAServer.LogLevel) {
+		switch *c.MFAServer.LogLevel {
+		case "DEBUG":
+			c.MFAServer.Loggers.Debug = log.New(logfile, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile)
+			c.MFAServer.Loggers.Info = log.New(logfile, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+			c.MFAServer.Loggers.Warning = log.New(logfile, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
+		case "INFO":
+			c.MFAServer.Loggers.Info = log.New(logfile, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+			c.MFAServer.Loggers.Warning = log.New(logfile, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
+		case "WARNING":
+			c.MFAServer.Loggers.Warning = log.New(logfile, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
+		}
+		return nil
+	} else {
+		return errors.New(fmt.Sprintf("An invalid log level was provided. Accepted values are %v", validLogLevels))
 	}
 }
 
@@ -73,7 +125,10 @@ func Load(cfgPath string) (*Config, error) {
 	if err != nil {
 		return nil, errors.New("Configuration file could not be parsed: " + err.Error())
 	}
-	c.WithVaultConfig(vaultAPI.DefaultConfig())
+	err = loggerSetUp(c)
+	if err != nil {
+		return nil, errors.New("Configuration failed in setting up logging: " + err.Error())
+	}
 	c.Vault.VaultConfig.Address = *c.Vault.VaultReSTClientConfig.EndPoint
 	if c.Vault.VaultReSTClientConfig.TrustCACert != nil {
 		c.WithVaultCAFilePath(*c.Vault.VaultReSTClientConfig.TrustCACert)
@@ -82,7 +137,10 @@ func Load(cfgPath string) (*Config, error) {
 		if c.Vault.UserIDFile == nil {
 			return nil, errors.New("Configuration file does not define a UserId or UserIdFile to use to access Vault")
 		} else {
-			c.WithVaultUserIdFile(*c.Vault.UserIDFile)
+			_, err := c.WithVaultUserIdFile(*c.Vault.UserIDFile)
+			if err != nil {
+				return nil, errors.New("Configuration issue with processing the UserIDFile: " + err.Error())
+			}
 		}
 	}
 	if c.MFAServer.TLS.Enabled {
@@ -91,7 +149,6 @@ func Load(cfgPath string) (*Config, error) {
 			return nil, errors.New("TLS configuration for MFA Server not valid: " + err.Error())
 		}
 	}
-
 	return c, nil
 }
 
@@ -205,6 +262,14 @@ func (c *Config) WithMFATLS(certPath, keyPath string) (*Config, error) {
 	return c, nil
 }
 
+func (c *Config) WithLogLevel(l string) (*Config, error) {
+	if isValidLogLevel(l) {
+		c.MFAServer.LogLevel = &l
+		return c, nil
+	}
+	return c, errors.New(fmt.Sprintf("An invalid log level of %s was provided. Accepted values are %v", l, validLogLevels))
+}
+
 func isValidPEMFile(p string) error {
 	pemData, err := ioutil.ReadFile(p)
 	if err != nil {
@@ -215,4 +280,17 @@ func isValidPEMFile(p string) error {
 		return errors.New(fmt.Sprintf("Not valid PEM format: Rest: %v Type: %v", len(rest), block.Type))
 	}
 	return nil
+}
+
+func isValidLogLevel(l string) bool {
+	return stringInSlice(l, validLogLevels)
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
 }

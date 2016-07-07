@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/jcmturner/mfaserver/config"
 	"github.com/jcmturner/mfaserver/handlers"
 	"log"
@@ -16,9 +15,9 @@ func main() {
 	dir := usr.HomeDir
 	configPath := flag.String("config", dir+"/mfaserver-config.json", "Specify the path to the configuration file")
 	//Load config
-	c, err := config.Load(configPath)
+	c, err := config.Load(*configPath)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to configure MFA Server: %v", err))
+		log.Fatalf("Failed to configure MFA Server: %v\n", err)
 	}
 
 	//Set up handlers
@@ -26,14 +25,20 @@ func main() {
 	mux.HandleFunc("/validate", func(w http.ResponseWriter, r *http.Request) {
 		handlers.ValidateOTP(w, r, c)
 	})
-	//mux.HandleFunc("/enrole", handlers.Enrole)
+	mux.HandleFunc("/enrole", func(w http.ResponseWriter, r *http.Request) {
+		handlers.Enrole(w, r, c)
+	})
 	//mux.HandleFunc("/update", handlers.UpdateMFASecret)
+
+	c.MFAServer.Loggers.Info.Printf(`MFA Server - Configuration Complete:
+	Listenning socket: %s
+	TLS enabled: %t`, *c.MFAServer.ListenerSocket, c.MFAServer.TLS.Enabled)
 
 	//Start server
 	if c.MFAServer.TLS.Enabled {
-		err = http.ListenAndServeTLS(c.MFAServer.ListenerSocket, c.MFAServer.TLS.CertificateFile, c.MFAServer.TLS.KeyFile, mux)
+		err = http.ListenAndServeTLS(*c.MFAServer.ListenerSocket, *c.MFAServer.TLS.CertificateFile, *c.MFAServer.TLS.KeyFile, mux)
 	} else {
-		err = http.ListenAndServe(c.MFAServer.ListenerSocket, mux)
+		err = http.ListenAndServe(*c.MFAServer.ListenerSocket, mux)
 	}
 	log.Fatal(err)
 }

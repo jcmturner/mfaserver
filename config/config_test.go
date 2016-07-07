@@ -157,6 +157,10 @@ func TestLoad(t *testing.T) {
 	f.WriteString(u)
 	f.Close()
 
+	logfile, _ := ioutil.TempFile(os.TempDir(), "mocklogfile")
+	defer os.Remove(logfile.Name())
+	logfile.Close()
+
 	ep := "https://127.0.0.1:8200"
 
 	completeJson := fmt.Sprintf(`{
@@ -176,9 +180,11 @@ func TestLoad(t *testing.T) {
 				"Enabled": true,
 				"CertificateFile": "%s",
 				"KeyFile": "%s"
-				}
+				},
+			"LogFile": "%s",
+			"LogLevel": "INFO"
 		}
-	}`, ep, certPath, f.Name(), certPath, keyPath)
+	}`, ep, certPath, f.Name(), certPath, keyPath, logfile.Name())
 
 	testConfigFile, _ := ioutil.TempFile(os.TempDir(), "config")
 	defer os.Remove(testConfigFile.Name())
@@ -200,4 +206,6 @@ func TestLoad(t *testing.T) {
 	assert.Equal(t, true, c.MFAServer.TLS.Enabled, "MFAServer ListenerSocket not as expected")
 	assert.Equal(t, certPath, *c.MFAServer.TLS.CertificateFile, "MFAServer TLS CertificateFile not as expected")
 	assert.Equal(t, keyPath, *c.MFAServer.TLS.KeyFile, "MFAServer TLS KeyFile not as expected")
+	assert.Equal(t, logfile.Name(), *c.MFAServer.LogFilePath, "MFAServer log file not as expected")
+
 }
