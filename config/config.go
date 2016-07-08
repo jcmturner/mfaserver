@@ -38,7 +38,7 @@ type VaultConf struct {
 }
 
 type UserIdFile struct {
-	UserID string `json:"UserId"`
+	UserID string `json:"UserID"`
 }
 
 type MFAServer struct {
