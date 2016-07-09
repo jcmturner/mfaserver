@@ -8,11 +8,16 @@ import (
 	"github.com/jcmturner/mfaserver/secrets"
 	"io"
 	"net/http"
+
+	"fmt"
+	"github.com/jcmturner/goqr"
+	"net/url"
 )
 
 type enroleRequestData struct {
 	Domain   string `json:"domain"`
 	Username string `json:"username"`
+	Issuer   string `json:"issuer"`
 }
 
 type enroleResponseData struct {
@@ -43,10 +48,22 @@ func Enrole(w http.ResponseWriter, r *http.Request, c *config.Config) {
 		c.MFAServer.Loggers.Error.Printf("%s, OTP enrolement failed for %s/%s whilst generating and storing secret: %v", r.RemoteAddr, data.Domain, data.Username, err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-	d := enroleResponseData{Secret: s}
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	if err := json.NewEncoder(w).Encode(d); err != nil {
-		c.MFAServer.Loggers.Error.Printf("%s, OTP enrolement failed for %s/%s whilst returning body data: %v", r.RemoteAddr, data.Domain, data.Username, err)
+
+	if r.Header.Get("Accept-Encoding") == "image/png" {
+		gAuthURL := fmt.Sprintf("otpauth://totp/%s:%s@%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", url.QueryEscape(data.Issuer), data.Username, data.Domain, s, url.QueryEscape(data.Issuer))
+		img, err := getQRCodeBytes(gAuthURL)
+		if err != nil {
+			c.MFAServer.Loggers.Error.Printf("%s, OTP enrolement failed for %s/%s whilst generating QR code: %v", r.RemoteAddr, data.Domain, data.Username, err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Write(img)
+	} else {
+		d := enroleResponseData{Secret: s}
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		if err := json.NewEncoder(w).Encode(d); err != nil {
+			c.MFAServer.Loggers.Error.Printf("%s, OTP enrolement failed for %s/%s whilst returning body data: %v", r.RemoteAddr, data.Domain, data.Username, err)
+		}
 	}
 }
 
@@ -56,10 +73,18 @@ func createAndStoreSecret(c *config.Config, data *enroleRequestData) (string, er
 	if err != nil {
 		return "", errors.New("Could not generate secret: " + err.Error())
 	}
-	err = secrets.Store(c, "/"+data.Domain+"/"+data.Username, "mfa", s)
+	err = secrets.Store(c, "/"+data.Issuer+"/"+data.Domain+"/"+data.Username, "mfa", s)
 	if err != nil {
 		return "", errors.New("Could not store secret in the vault: " + err.Error())
 	}
 	c.MFAServer.Loggers.Info.Printf("Successfully created and stored secret for %s/%s", data.Domain, data.Username)
 	return s, nil
+}
+
+func getQRCodeBytes(u string) ([]byte, error) {
+	code, err := goqr.Encode(u, goqr.H)
+	if err != nil {
+		return nil, err
+	}
+	return code.PNG(), nil
 }

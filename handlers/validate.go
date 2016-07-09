@@ -11,13 +11,14 @@ import (
 )
 
 type validateRequestData struct {
+	Issuer   string `json:"issuer"`
 	Domain   string `json:"domain"`
 	Username string `json:"username"`
 	OTP      string `json:"otp"`
 }
 
 func checkOTP(c *config.Config, data *validateRequestData) (bool, error) {
-	m, err := secrets.Read(c, "/"+data.Domain+"/"+data.Username)
+	m, err := secrets.Read(c, "/"+data.Issuer+"/"+data.Domain+"/"+data.Username)
 	if err != nil {
 		return false, err
 	}
