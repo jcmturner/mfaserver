@@ -8,6 +8,8 @@ The MFA server can enrole a user, storing a unique TOTP secret for each use in a
 ## Prerequisites
 Hashicorp Vault (https://www.vaultproject.io/) is needed as the backend store for the MFA secrets. The Vault instance will need to implement AppId authentication (https://www.vaultproject.io/docs/auth/app-id.html).
 
+An LDAP server is also needed to authenticate the users' passwords.
+
 ## Configuration
 Below is an example JSON configuration for the MFA server. It includes all available keys but not all of these are necessarily needed.
 ```
