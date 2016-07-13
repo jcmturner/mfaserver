@@ -4,6 +4,7 @@ import (
 	"flag"
 	"github.com/jcmturner/mfaserver/config"
 	"github.com/jcmturner/mfaserver/handlers"
+	"github.com/jcmturner/mfaserver/version"
 	"log"
 	"net/http"
 	"os/user"
@@ -31,8 +32,9 @@ func main() {
 	//mux.HandleFunc("/update", handlers.UpdateMFASecret)
 
 	c.MFAServer.Loggers.Info.Printf(`MFA Server - Configuration Complete:
+	Version: %s
 	Listenning socket: %s
-	TLS enabled: %t`, *c.MFAServer.ListenerSocket, c.MFAServer.TLS.Enabled)
+	TLS enabled: %t`, version.Version, *c.MFAServer.ListenerSocket, c.MFAServer.TLS.Enabled)
 
 	//Start server
 	if c.MFAServer.TLS.Enabled {

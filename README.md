@@ -32,6 +32,11 @@ Below is an example JSON configuration for the MFA server. It includes all avail
     "UserIDFile": "/path/to/file/containing/vaultUserId",
     "UserID": "0ecd7b5d-4885-45c1-a03f-5949e485c6bf",
     "MFASecretsPath": "/secret/mfatest"
+  },
+  "LDAP": {
+    "EndPoint": "ldaps://192.168.1.200:636",
+    "TrustCACert": "/path/to/trustedcert.pem",
+    "UserDN": "uid={username},ou=users,dc=example,dc=com"
   }
 }
 ```
@@ -46,12 +51,16 @@ The configuration keys are explained below
   * LogLevel: The log level to use (DEBUG|INFO|WARNING|ERROR)
 * Vault: This section defines how to connect and authenticate to the Vault instance.
   * EndPoint: The URL endpoint of the Vault instance.
-  * TrustCACert: The certifcate to trust that signed the server certificate of the Vault instance.
+  * TrustCACert: The certificate to trust that signed the server certificate of the Vault instance.
   * AppIDRead: The Vault AppId used when performing read operations from the Vault.
   * AppIDWrite: The Vault AppId used when performing write operations to the Vault.
   * UserIDFile: (Recommended) The file that holds the UserID secret used to authenticate to the Vault. The format of this file is given below. The file permissions of this file should be highly restrictive so only the MFA server process user can read it.
   * UserID: (Optional) Specify the UserID here rather than in its own file. It is recommended not to use this but rather to put the UserID in a seperate file.
   * MFASecretPath: The path within Vault where the MFA secrets will be held.
+* LDAP: This section defines how to connect to an LDAP server to authenticate the username and password.
+  * EndPoint: The URL endpoint of the LDAP server.
+  * TrustCACert: The certificate to trust that signed the server certificate of the LDAP server. Required if ldaps:// is used to connect to the LDAP server.
+  * UserDN: The full LDAP distinguished name (DN) to bind to LDAP with using "{username}" to indicate where the username provided should be inserted.
 
 #### UserID File
 If using a UserID file it should have this format:
@@ -74,11 +83,15 @@ The MFA Server implements a simple API:
   * Request POST data:
   ```
   {
+    "issuer": "issuer",
     "domain": "domainname",
-    "username": "username"
+    "username": "username",
+    "password": "password"
   }
   ```
   * Response data:
+    If the "Accept-Encoding" header value is set to "image/png" then a png QR code image is returned suitable for use with the Google Authenticator application.
+    Else the following JSON is returned:
   ```
   {
     "secret": "secretstring"
@@ -88,8 +101,10 @@ The MFA Server implements a simple API:
   * Request POST data:
   ```
   {
+    "issuer": "issuer",
     "domain": "domainname",
     "username": "username",
+    "password": "password",
     "otp": "123456"
   }
   ```
@@ -100,5 +115,5 @@ The MFA Server implements a simple API:
   * Not yet implemented
 
 ## Enhancements
-* Need to add some form or authentication to the enrole and update actions
-* Generate a QR code for the secret when enroling or updating
+* Need to check the user has not already been enroled
+* Need to implement the update part of the API that will require the current OTP

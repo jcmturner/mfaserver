@@ -11,12 +11,14 @@ import (
 
 	"fmt"
 	"github.com/jcmturner/goqr"
+	"github.com/jcmturner/mfaserver/ldap"
 	"net/url"
 )
 
 type enroleRequestData struct {
 	Domain   string `json:"domain"`
 	Username string `json:"username"`
+	Password string `json:"password"`
 	Issuer   string `json:"issuer"`
 }
 
@@ -25,28 +27,26 @@ type enroleResponseData struct {
 }
 
 func Enrole(w http.ResponseWriter, r *http.Request, c *config.Config) {
-	//Process the JSON body
-	var data enroleRequestData
-	defer r.Body.Close()
-	var dec *json.Decoder
-	//Set limit to reading 1MB. Probably a bit large. Prevents DOS by posting large amount of data
-	dec = json.NewDecoder(io.LimitReader(r.Body, 1024))
-	err := dec.Decode(&data)
+	data, err, HTTPCode := processEnroleRequestData(r)
 	if err != nil {
-		//We should fail safe
-		c.MFAServer.Loggers.Error.Printf("%s, Could not parse data posted from client to the enrole api : %v\n", r.RemoteAddr, err)
-		w.WriteHeader(http.StatusBadRequest)
-	}
-	if data.Domain == "" || data.Username == "" {
-		c.MFAServer.Loggers.Warning.Printf("%s, Could extract values correctly from the enrolement request.\n", r.RemoteAddr)
-		w.WriteHeader(http.StatusBadRequest)
+		c.MFAServer.Loggers.Error.Println(err.Error())
+		w.WriteHeader(HTTPCode)
+		return
 	}
 	c.MFAServer.Loggers.Info.Printf("%s, OTP enrolement request received for %s/%s\n", r.RemoteAddr, data.Domain, data.Username)
+
+	err = ldap.Authenticate(data.Username, data.Password, c)
+	if err != nil {
+		c.MFAServer.Loggers.Info.Printf("%s, OTP enrolement failed for %s/%s. LDAP authentication failed: %v", r.RemoteAddr, data.Domain, data.Username, err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 
 	s, err := createAndStoreSecret(c, &data)
 	if err != nil {
 		c.MFAServer.Loggers.Error.Printf("%s, OTP enrolement failed for %s/%s whilst generating and storing secret: %v", r.RemoteAddr, data.Domain, data.Username, err)
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	if r.Header.Get("Accept-Encoding") == "image/png" {
@@ -55,6 +55,7 @@ func Enrole(w http.ResponseWriter, r *http.Request, c *config.Config) {
 		if err != nil {
 			c.MFAServer.Loggers.Error.Printf("%s, OTP enrolement failed for %s/%s whilst generating QR code: %v", r.RemoteAddr, data.Domain, data.Username, err)
 			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "image/png")
 		w.Write(img)
@@ -65,6 +66,22 @@ func Enrole(w http.ResponseWriter, r *http.Request, c *config.Config) {
 			c.MFAServer.Loggers.Error.Printf("%s, OTP enrolement failed for %s/%s whilst returning body data: %v", r.RemoteAddr, data.Domain, data.Username, err)
 		}
 	}
+}
+
+func processEnroleRequestData(r *http.Request) (enroleRequestData, error, int) {
+	var data enroleRequestData
+	defer r.Body.Close()
+	var dec *json.Decoder
+	//Set limit to reading 1MB. Probably a bit large. Prevents DOS by posting large amount of data
+	dec = json.NewDecoder(io.LimitReader(r.Body, 1024))
+	err := dec.Decode(&data)
+	if err != nil {
+		return data, errors.New(fmt.Sprintf("%s, Could not parse data posted from client to the enrole api : %v\n", r.RemoteAddr, err)), http.StatusBadRequest
+	}
+	if data.Domain == "" || data.Username == "" || data.Password == "" || data.Issuer == "" {
+		return data, errors.New(fmt.Sprintf("%s, Could extract values correctly from the enrolement request.\n", r.RemoteAddr)), http.StatusBadRequest
+	}
+	return data, nil, 0
 }
 
 func createAndStoreSecret(c *config.Config, data *enroleRequestData) (string, error) {

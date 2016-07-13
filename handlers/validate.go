@@ -3,8 +3,11 @@ package handlers
 import (
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/jcmturner/gootp"
 	"github.com/jcmturner/mfaserver/config"
+	"github.com/jcmturner/mfaserver/ldap"
 	"github.com/jcmturner/mfaserver/secrets"
 	"io"
 	"net/http"
@@ -14,6 +17,7 @@ type validateRequestData struct {
 	Issuer   string `json:"issuer"`
 	Domain   string `json:"domain"`
 	Username string `json:"username"`
+	Password string `json:"password"`
 	OTP      string `json:"otp"`
 }
 
@@ -35,6 +39,44 @@ func checkOTP(c *config.Config, data *validateRequestData) (bool, error) {
 }
 
 func ValidateOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
+	//Process the request data
+	data, err, HTTPCode := processValidateRequestData(r)
+	if err != nil {
+		c.MFAServer.Loggers.Error.Println(err.Error())
+		w.WriteHeader(HTTPCode)
+		return
+	}
+	c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation request received for %s/%s", r.RemoteAddr, data.Domain, data.Username)
+
+	err = ldap.Authenticate(data.Username, data.Password, c)
+	if err != nil {
+		c.MFAServer.Loggers.Info.Printf("%s, OTP validation failed for %s/%s. LDAP authentication failed: %v", r.RemoteAddr, data.Domain, data.Username, err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	//Check the OTP value provided
+	ok, err := checkOTP(c, &data)
+	if err != nil {
+		//We should fail safe
+		c.MFAServer.Loggers.Error.Printf("%s, Error during the validation of OTP for %s/%s : %v", r.RemoteAddr, data.Domain, data.Username, err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if ok {
+		c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation passed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
+		//Respond with a 204 to indicate the check passed
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	//Fail safe
+	c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation failed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
+	//Respond with 401 to indicate the check failed
+	w.WriteHeader(http.StatusUnauthorized)
+	return
+}
+
+func processValidateRequestData(r *http.Request) (validateRequestData, error, int) {
 	//Process the JSON body
 	var data validateRequestData
 	defer r.Body.Close()
@@ -44,28 +86,10 @@ func ValidateOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	err := dec.Decode(&data)
 	if err != nil {
 		//We should fail safe
-		c.MFAServer.Loggers.Error.Printf("%s, Could not parse data posted from client : %v", r.RemoteAddr, err)
-		w.WriteHeader(http.StatusUnauthorized)
+		return data, errors.New(fmt.Sprintf("%s, Could not parse data posted from client : %v", r.RemoteAddr, err)), http.StatusUnauthorized
 	}
-	if data.Domain == "" || data.Username == "" || data.OTP == "" {
-		c.MFAServer.Loggers.Warning.Printf("%s, Could not extract values correctly from the validation request.", r.RemoteAddr)
-		w.WriteHeader(http.StatusBadRequest)
+	if data.Domain == "" || data.Username == "" || data.OTP == "" || data.Issuer == "" {
+		return data, errors.New(fmt.Sprintf("%s, Could not extract values correctly from the validation request.", r.RemoteAddr)), http.StatusBadRequest
 	}
-	c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation request received for %s/%s '%s'", r.RemoteAddr, data.Domain, data.Username, data.OTP)
-
-	//Check the OTP value provided
-	ok, err := checkOTP(c, &data)
-	if err != nil {
-		//We should fail safe
-		c.MFAServer.Loggers.Error.Printf("%s, Error during the validation of OTP for %s/%s : %v", r.RemoteAddr, data.Domain, data.Username, err)
-		w.WriteHeader(http.StatusUnauthorized)
-	}
-	if ok {
-		c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation passed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
-		//Respond with a 201 to indicate the check passed
-		w.WriteHeader(http.StatusNoContent)
-	} else {
-		c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation failed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
-		w.WriteHeader(http.StatusUnauthorized)
-	}
+	return data, nil, 0
 }

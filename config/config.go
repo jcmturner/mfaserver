@@ -10,12 +10,15 @@ import (
 	vaultAPI "github.com/hashicorp/vault/api"
 	"github.com/jcmturner/mfaserver/vault"
 	"github.com/jcmturner/restclient"
+	"github.com/mavricknz/ldap"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 )
 
 var validLogLevels = []string{"ERROR", "WARNING", "INFO", "DEBUG"}
@@ -23,6 +26,7 @@ var validLogLevels = []string{"ERROR", "WARNING", "INFO", "DEBUG"}
 type Config struct {
 	Vault     VaultConf `json:"Vault"`
 	MFAServer MFAServer `json:"MFAServer"`
+	LDAP      LDAPConf  `json:"LDAP"`
 }
 
 type VaultConf struct {
@@ -35,6 +39,13 @@ type VaultConf struct {
 	VaultConfig           *vaultAPI.Config
 	VaultClient           *vaultAPI.Client
 	VaultLogin            *vault.Login
+}
+
+type LDAPConf struct {
+	EndPoint       *string `json:"EndPoint"`
+	TrustCACert    *string `json:"TrustCACert"`
+	UserDN         *string `json:"UserDN"`
+	LDAPConnection *ldap.LDAPConnection
 }
 
 type UserIdFile struct {
@@ -148,6 +159,10 @@ func Load(cfgPath string) (*Config, error) {
 		if err != nil {
 			return nil, errors.New("TLS configuration for MFA Server not valid: " + err.Error())
 		}
+	}
+	err = c.createLDAPConnection()
+	if err != nil {
+		return nil, errors.New("Error configuring LDAP connection: " + err.Error())
 	}
 	return c, nil
 }
@@ -293,4 +308,42 @@ func stringInSlice(a string, list []string) bool {
 		}
 	}
 	return false
+}
+
+func (c *Config) createLDAPConnection() error {
+	var port uint64
+	s := *c.LDAP.EndPoint
+	if strings.HasPrefix(*c.LDAP.EndPoint, "ldaps://") {
+		s = s[len("ldaps://"):]
+		if i := strings.LastIndex(s, ":"); i != -1 {
+			port, _ = strconv.ParseUint(s[i+1:], 10, 16)
+			s = s[0:i]
+		} else {
+			port = 636
+		}
+
+		tlsConfig := &tls.Config{RootCAs: x509.NewCertPool()}
+		pemData, err := ioutil.ReadFile(*c.LDAP.TrustCACert)
+		if err != nil {
+			return err
+		}
+		ok := tlsConfig.RootCAs.AppendCertsFromPEM(pemData)
+		if !ok {
+			return errors.New("Couldn't load PEM data for LDAP connection")
+		}
+
+		c.LDAP.LDAPConnection = ldap.NewLDAPTLSConnection(s, uint16(port), tlsConfig)
+	} else if strings.HasPrefix(*c.LDAP.EndPoint, "ldap://") {
+		s = s[len("ldap://"):]
+		if i := strings.LastIndex(s, ":"); i != -1 {
+			port, _ = strconv.ParseUint(s[i+1:], 10, 16)
+			s = s[0:i]
+		} else {
+			port = 389
+		}
+		c.LDAP.LDAPConnection = ldap.NewLDAPConnection(s, uint16(port))
+	} else {
+		return errors.New("Invalid protocol in LDAP endpoint: " + *c.LDAP.EndPoint)
+	}
+	return nil
 }
