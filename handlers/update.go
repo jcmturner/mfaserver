@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jcmturner/mfaserver/config"
-	"github.com/jcmturner/mfaserver/ldap"
-	"github.com/jcmturner/mfaserver/secrets"
 	"net/http"
 	"net/url"
 )
@@ -19,37 +17,14 @@ func Update(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	}
 	c.MFAServer.Loggers.Info.Printf("%s, OTP update request received for %s/%s\n", r.RemoteAddr, data.Domain, data.Username)
 
-	err = ldap.Authenticate(data.Username, data.Password, c)
-	if err != nil {
-		c.MFAServer.Loggers.Info.Printf("%s, OTP update failed for %s/%s. LDAP authentication failed: %v", r.RemoteAddr, data.Domain, data.Username, err)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	if !secrets.Exists(c, "/"+data.Issuer+"/"+data.Domain+"/"+data.Username, "mfa") {
-		c.MFAServer.Loggers.Info.Printf("%s, OTP update failed for %s/%s as the user has not yet enroled.", r.RemoteAddr, data.Domain, data.Username)
-		w.WriteHeader(http.StatusForbidden)
-		d := messageResponseData{Message: "Forbidden - User has not enroled"}
+	ok, HTTPCode := twoFactorAuthenticate(c, r, &data)
+	if !ok {
+		w.WriteHeader(HTTPCode)
+		d := messageResponseData{Message: "Cannot update user's secret as either 2FA failed or user has not been enroled"}
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		json.NewEncoder(w).Encode(d)
 		return
 	}
-
-	//Check the OTP value provided
-	ok, err := checkOTP(c, &data)
-	if err != nil {
-		//We should fail safe
-		c.MFAServer.Loggers.Error.Printf("%s, Error during the update of OTP for %s/%s : %v", r.RemoteAddr, data.Domain, data.Username, err)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	if !ok {
-		c.MFAServer.Loggers.Info.Printf("%s, OTP validation failed during update for %s/%s", r.RemoteAddr, data.Domain, data.Username)
-		//Respond with 401 to indicate the check failed
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	c.MFAServer.Loggers.Info.Printf("%s, OTP validation passed for update of %s/%s", r.RemoteAddr, data.Domain, data.Username)
 
 	udata := enroleRequestData{Username: data.Username,
 		Domain:   data.Domain,

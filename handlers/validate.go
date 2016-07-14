@@ -21,23 +21,6 @@ type validateRequestData struct {
 	OTP      string `json:"otp"`
 }
 
-func checkOTP(c *config.Config, data *validateRequestData) (bool, error) {
-	m, err := secrets.Read(c, "/"+data.Issuer+"/"+data.Domain+"/"+data.Username)
-	if err != nil {
-		return false, err
-	}
-	s := m["mfa"].(string)
-	generatedOTP, _, err := gootp.GetTOTPNow(s, sha1.New, 6)
-	if err != nil {
-		return false, err
-	}
-	if data.OTP == generatedOTP {
-		return true, nil
-	}
-	//Fail safe
-	return false, nil
-}
-
 func ValidateOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	//Process the request data
 	data, err, HTTPCode := processValidateRequestData(r)
@@ -48,31 +31,8 @@ func ValidateOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	}
 	c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation request received for %s/%s", r.RemoteAddr, data.Domain, data.Username)
 
-	err = ldap.Authenticate(data.Username, data.Password, c)
-	if err != nil {
-		c.MFAServer.Loggers.Info.Printf("%s, OTP validation failed for %s/%s. LDAP authentication failed: %v", r.RemoteAddr, data.Domain, data.Username, err)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
-	//Check the OTP value provided
-	ok, err := checkOTP(c, &data)
-	if err != nil {
-		//We should fail safe
-		c.MFAServer.Loggers.Error.Printf("%s, Error during the validation of OTP for %s/%s : %v", r.RemoteAddr, data.Domain, data.Username, err)
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	if ok {
-		c.MFAServer.Loggers.Info.Printf("%s, OTP validation passed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
-		//Respond with a 204 to indicate the check passed
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	//Fail safe
-	c.MFAServer.Loggers.Info.Printf("%s, OTP validation failed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
-	//Respond with 401 to indicate the check failed
-	w.WriteHeader(http.StatusUnauthorized)
+	_, HTTPCode = twoFactorAuthenticate(c, r, &data)
+	w.WriteHeader(HTTPCode)
 	return
 }
 
@@ -92,4 +52,48 @@ func processValidateRequestData(r *http.Request) (validateRequestData, error, in
 		return data, errors.New(fmt.Sprintf("%s, Could not extract values correctly from the validation request.", r.RemoteAddr)), http.StatusBadRequest
 	}
 	return data, nil, 0
+}
+
+func twoFactorAuthenticate(c *config.Config, r *http.Request, data *validateRequestData) (bool, int) {
+	//Check user password
+	err := ldap.Authenticate(data.Username, data.Password, c)
+	if err != nil {
+		c.MFAServer.Loggers.Info.Printf("%s, OTP validation failed for %s/%s. LDAP authentication failed: %v", r.RemoteAddr, data.Domain, data.Username, err)
+		return false, http.StatusUnauthorized
+	}
+
+	//Check the OTP value provided
+	ok, err := checkOTP(c, data)
+	if err != nil {
+		//We should fail safe
+		c.MFAServer.Loggers.Error.Printf("%s, Error during the validation of OTP for %s/%s : %v", r.RemoteAddr, data.Domain, data.Username, err)
+		return false, http.StatusUnauthorized
+	}
+	if ok {
+		c.MFAServer.Loggers.Info.Printf("%s, OTP validation passed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
+		//Respond with a 204 to indicate the check passed
+		return true, http.StatusNoContent
+	}
+
+	//Fail safe
+	c.MFAServer.Loggers.Info.Printf("%s, OTP validation failed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
+	//Respond with 401 to indicate the check failed
+	return false, http.StatusUnauthorized
+}
+
+func checkOTP(c *config.Config, data *validateRequestData) (bool, error) {
+	m, err := secrets.Read(c, "/"+data.Issuer+"/"+data.Domain+"/"+data.Username)
+	if err != nil {
+		return false, err
+	}
+	s := m["mfa"].(string)
+	generatedOTP, _, err := gootp.GetTOTPNow(s, sha1.New, 6)
+	if err != nil {
+		return false, err
+	}
+	if data.OTP == generatedOTP {
+		return true, nil
+	}
+	//Fail safe
+	return false, nil
 }

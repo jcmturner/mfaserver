@@ -133,7 +133,7 @@ func RunMockVault(t *testing.T) (net.Listener, string, string, string) {
 
 }
 
-func GenerateSelfSignedTLSKeyPairFiles(t *testing.T) (string, string) {
+func GenerateSelfSignedTLSKeyPairFiles(t *testing.T) (string, string, []byte, *rsa.PrivateKey) {
 	derBytes, priv := GenerateSelfSignedTLSKeyPairData(t)
 	certOut, _ := ioutil.TempFile(os.TempDir(), "testCert")
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
@@ -141,7 +141,7 @@ func GenerateSelfSignedTLSKeyPairFiles(t *testing.T) (string, string) {
 	keyOut, _ := ioutil.TempFile(os.TempDir(), "testKey")
 	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 	keyOut.Close()
-	return certOut.Name(), keyOut.Name()
+	return certOut.Name(), keyOut.Name(), derBytes, priv
 }
 
 func GenerateSelfSignedTLSKeyPairData(t *testing.T) ([]byte, *rsa.PrivateKey) {

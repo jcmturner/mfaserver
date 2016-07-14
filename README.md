@@ -111,10 +111,34 @@ The MFA Server implements a simple API:
   }
   ```
   * Response:
-    * HTTP Response code 204 - indicates the OTP is valid at this moment in time for the user specified
+    * HTTP response code 204 - indicates the OTP is valid at this moment in time for the user specified
     * HTTP response code 401 - indicates the OTP is not valid
 * /update - create and store a new MFA secret for an existing user
-  * Not yet implemented
+  * Request POST data:
+  ```
+  {
+    "issuer": "issuer",
+    "domain": "domainname",
+    "username": "username",
+    "password": "password",
+    "otp": "123456"
+  }
+  ```
+  * Response:
+  This is the same as the enrol function above.
 
+### Example Usage Commands
+* Enrol - getting QR code
+```
+curl -o test.png -H "Accept-Encoding: image/png" -X POST -d '{"domain": "testdom", "username": "bob", "password": "bobpass", "issuer": "testapp"}' -w "%{http_code}" https://127.0.0.1:8443/enrol
+```
+* Validate
+```
+curl -w "%{http_code}" -X POST -d '{"issuer": "testapp", "domain": "testdom", "username": "bob", "password":"bobpass", "otp":"123456"}' http://127.0.0.1:8443/validate
+```
+* Update
+```
+curl -o test.png -H "Accept-Encoding: image/png" -X POST -d '{"domain": "testdom", "username": "bob", "password": "bobpass", "issuer": "testapp"}' -w "%{http_code}" https://127.0.0.1:8443/update
+```
 ## Enhancements
 * Implement a delete capability

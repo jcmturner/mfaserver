@@ -280,6 +280,10 @@ func (c *Config) WithMFATLS(certPath, keyPath string) (*Config, error) {
 func (c *Config) WithLogLevel(l string) (*Config, error) {
 	if isValidLogLevel(l) {
 		c.MFAServer.LogLevel = &l
+		err := loggerSetUp(c)
+		if err != nil {
+			return c, errors.New(fmt.Sprintf("Configuring loggers failed: %v", err))
+		}
 		return c, nil
 	}
 	return c, errors.New(fmt.Sprintf("An invalid log level of %s was provided. Accepted values are %v", l, validLogLevels))

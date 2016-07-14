@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -133,7 +134,7 @@ func TestConfig_WithMFAListenerSocket(t *testing.T) {
 
 func TestConfig_WithMFATLS(t *testing.T) {
 	c := NewConfig()
-	certPath, keyPath := testtools.GenerateSelfSignedTLSKeyPairFiles(t)
+	certPath, keyPath, _, _ := testtools.GenerateSelfSignedTLSKeyPairFiles(t)
 	defer os.Remove(certPath)
 	defer os.Remove(keyPath)
 
@@ -146,7 +147,12 @@ func TestConfig_WithMFATLS(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	certPath, keyPath := testtools.GenerateSelfSignedTLSKeyPairFiles(t)
+	certPath, keyPath, certBytes, _ := testtools.GenerateSelfSignedTLSKeyPairFiles(t)
+	//Have to add test cert into a certPool to compare in the assertion as this is all we can get back from the TLSClientConfig of the http.Client and certPool has no public mechanism to extract certs from it
+	cert, _ := x509.ParseCertificate(certBytes)
+	certPool := x509.NewCertPool()
+	certPool.AddCert(cert)
+
 	//Create temp userid file
 	f, _ := ioutil.TempFile(os.TempDir(), "userid")
 	defer os.Remove(f.Name())
@@ -162,8 +168,20 @@ func TestLoad(t *testing.T) {
 	logfile.Close()
 
 	ep := "https://127.0.0.1:8200"
+	lep := "ldaps://127.0.0.1:636"
+	dn := "uid={username},ou=users,dc=example,dc=com"
 
 	completeJson := fmt.Sprintf(`{
+		"MFAServer": {
+			"ListenerSocket": "127.0.0.1:7443",
+			"TLS": {
+				"Enabled": true,
+				"CertificateFile": "%s",
+				"KeyFile": "%s"
+				},
+			"LogFile": "%s",
+			"LogLevel": "INFO"
+		},
 		"Vault": {
 			"VaultConnection": {
 				"EndPoint": "%s",
@@ -174,17 +192,12 @@ func TestLoad(t *testing.T) {
 			"UserIDFile": "%s",
 			"MFASecretsPath": "/secrets/testload"
 			},
-		"MFAServer": {
-			"ListenerSocket": "127.0.0.1:7443",
-			"TLS": {
-				"Enabled": true,
-				"CertificateFile": "%s",
-				"KeyFile": "%s"
-				},
-			"LogFile": "%s",
-			"LogLevel": "INFO"
-		}
-	}`, ep, certPath, f.Name(), certPath, keyPath, logfile.Name())
+		"LDAP": {
+			"EndPoint": "%s",
+			"TrustCACert": "%s",
+			"UserDN": "%s"
+    		}
+	}`, certPath, keyPath, logfile.Name(), ep, certPath, f.Name(), lep, certPath, dn)
 
 	testConfigFile, _ := ioutil.TempFile(os.TempDir(), "config")
 	defer os.Remove(testConfigFile.Name())
@@ -195,6 +208,13 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("Error loading configuration JSON: %v", err)
 	}
 	assert.IsType(t, &Config{}, c, "Object is not a config type")
+
+	assert.Equal(t, "127.0.0.1:7443", *c.MFAServer.ListenerSocket, "MFAServer ListenerSocket not as expected")
+	assert.Equal(t, true, c.MFAServer.TLS.Enabled, "MFAServer ListenerSocket not as expected")
+	assert.Equal(t, certPath, *c.MFAServer.TLS.CertificateFile, "MFAServer TLS CertificateFile not as expected")
+	assert.Equal(t, keyPath, *c.MFAServer.TLS.KeyFile, "MFAServer TLS KeyFile not as expected")
+	assert.Equal(t, logfile.Name(), *c.MFAServer.LogFilePath, "MFAServer log file not as expected")
+
 	assert.Equal(t, ep, *c.Vault.VaultReSTClientConfig.EndPoint, "Vault endpoint not as expected")
 	assert.Equal(t, certPath, *c.Vault.VaultReSTClientConfig.TrustCACert, "Vault TrustCACert not as expected")
 	assert.Equal(t, "appidread", *c.Vault.AppIDRead, "Vault AppIDRead not as expected")
@@ -202,10 +222,42 @@ func TestLoad(t *testing.T) {
 	assert.Equal(t, f.Name(), *c.Vault.UserIDFile, "Vault UserIDFile not as expected")
 	assert.Equal(t, userid, *c.Vault.UserID, "Vault UserID not as expected")
 	assert.Equal(t, "/secrets/testload", *c.Vault.MFASecretsPath, "Vault MFASecretsPath not as expected")
-	assert.Equal(t, "127.0.0.1:7443", *c.MFAServer.ListenerSocket, "MFAServer ListenerSocket not as expected")
-	assert.Equal(t, true, c.MFAServer.TLS.Enabled, "MFAServer ListenerSocket not as expected")
-	assert.Equal(t, certPath, *c.MFAServer.TLS.CertificateFile, "MFAServer TLS CertificateFile not as expected")
-	assert.Equal(t, keyPath, *c.MFAServer.TLS.KeyFile, "MFAServer TLS KeyFile not as expected")
-	assert.Equal(t, logfile.Name(), *c.MFAServer.LogFilePath, "MFAServer log file not as expected")
 
+	assert.Equal(t, lep[strings.LastIndex(lep, "/")+1:], c.LDAP.LDAPConnection.Addr, "LDAP endpoint address not as expected")
+	assert.Equal(t, certPath, *c.LDAP.TrustCACert, "LDAP TrustCACert not as expected")
+	assert.True(t, c.LDAP.LDAPConnection.IsTLS, "LDAP should be using TLS connection")
+	assert.Equal(t, certPool, c.LDAP.LDAPConnection.TlsConfig.RootCAs, "Certificate not set to be trusted in HTTP Client")
+	assert.Equal(t, dn, *c.LDAP.UserDN, "LDAP DN for binding not as expected")
+}
+
+func TestConfig_WithLogLevel(t *testing.T) {
+	var tests = []struct {
+		level string
+		valid bool
+	}{
+		{"DEBUG", true},
+		{"INFO", true},
+		{"WARNING", true},
+		{"ERROR", true},
+		{"debug", false},
+		{"", false},
+		{"blah", false},
+	}
+	c := NewConfig()
+	for _, test := range tests {
+		_, err := c.WithLogLevel(test.level)
+		if test.valid {
+			if err != nil {
+				t.Errorf("Setting log level returned an error when a valid value of %s was provided.", test.level)
+			}
+		} else {
+			if err == nil {
+				t.Errorf("Setting log level to and invalid value [%s] did not generate an error. ", test.level)
+			}
+		}
+	}
+	assert.Equal(t, "DEBUG: ", c.MFAServer.Loggers.Debug.Prefix(), "Prefix not correct for debug logger")
+	assert.Equal(t, "INFO: ", c.MFAServer.Loggers.Info.Prefix(), "Prefix not correct for debug logger")
+	assert.Equal(t, "WARNING: ", c.MFAServer.Loggers.Warning.Prefix(), "Prefix not correct for debug logger")
+	assert.Equal(t, "ERROR: ", c.MFAServer.Loggers.Error.Prefix(), "Prefix not correct for debug logger")
 }

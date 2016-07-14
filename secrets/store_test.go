@@ -36,7 +36,7 @@ func TestStore(t *testing.T) {
 	}
 }
 
-func TestStoreAndRead(t *testing.T) {
+func TestStoreReadExists(t *testing.T) {
 	conf, ln := mockVault(t)
 	defer ln.Close()
 
@@ -48,4 +48,7 @@ func TestStoreAndRead(t *testing.T) {
 		t.Errorf("Could not read secret back from vault: %v", err)
 	}
 	assert.Equal(t, testMFASecret, m[testMFARef], "Secret read is not the value expected")
+	if !Exists(conf, testMFAUser, testMFARef) {
+		t.Errorf("Secret is known to be in the Vault but method thinks it doesn't exist: %v", err)
+	}
 }
