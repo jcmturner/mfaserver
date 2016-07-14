@@ -63,3 +63,22 @@ func Read(conf *config.Config, p string) (map[string]interface{}, error) {
 	}
 	return s.Data, err
 }
+
+func Exists(conf *config.Config, p string, k string) bool {
+	if err := vaultClientLogin(conf); err != nil {
+		conf.MFAServer.Loggers.Error.Printf("Problem logging into the Vault during list operation: %v\n", err)
+		return false
+	}
+	logical := conf.Vault.VaultClient.Logical()
+	//Tried using the List method in the following line but it did not return any data when it should have.
+	s, err := logical.Read(*conf.Vault.MFASecretsPath + p)
+	if err != nil {
+		conf.MFAServer.Loggers.Error.Printf("Issue when listing secrets from Vault at %s: %v\n", *conf.Vault.MFASecretsPath+p, err)
+		return false
+	}
+	if s == nil {
+		return false
+	}
+	_, ok := s.Data[k]
+	return ok
+}

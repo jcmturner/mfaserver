@@ -26,15 +26,21 @@ func main() {
 	mux.HandleFunc("/validate", func(w http.ResponseWriter, r *http.Request) {
 		handlers.ValidateOTP(w, r, c)
 	})
-	mux.HandleFunc("/enrole", func(w http.ResponseWriter, r *http.Request) {
-		handlers.Enrole(w, r, c)
+	mux.HandleFunc("/enrol", func(w http.ResponseWriter, r *http.Request) {
+		handlers.Enrol(w, r, c)
 	})
-	//mux.HandleFunc("/update", handlers.UpdateMFASecret)
+	mux.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
+		handlers.Update(w, r, c)
+	})
 
 	c.MFAServer.Loggers.Info.Printf(`MFA Server - Configuration Complete:
 	Version: %s
 	Listenning socket: %s
 	TLS enabled: %t`, version.Version, *c.MFAServer.ListenerSocket, c.MFAServer.TLS.Enabled)
+
+	if !c.MFAServer.TLS.Enabled {
+		c.MFAServer.Loggers.Warning.Println("It is not recommended to run with TLS disabled as passwords will be sent unencrypted over the network.")
+	}
 
 	//Start server
 	if c.MFAServer.TLS.Enabled {

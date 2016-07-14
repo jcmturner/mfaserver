@@ -64,13 +64,13 @@ func ValidateOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
 		return
 	}
 	if ok {
-		c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation passed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
+		c.MFAServer.Loggers.Info.Printf("%s, OTP validation passed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
 		//Respond with a 204 to indicate the check passed
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	//Fail safe
-	c.MFAServer.Loggers.Info.Printf("%s, OTP vaidation failed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
+	c.MFAServer.Loggers.Info.Printf("%s, OTP validation failed for %s/%s", r.RemoteAddr, data.Domain, data.Username)
 	//Respond with 401 to indicate the check failed
 	w.WriteHeader(http.StatusUnauthorized)
 	return

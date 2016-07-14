@@ -26,7 +26,11 @@ type enroleResponseData struct {
 	Secret string `json:"secret"`
 }
 
-func Enrole(w http.ResponseWriter, r *http.Request, c *config.Config) {
+type messageResponseData struct {
+	Message string `json:"message"`
+}
+
+func Enrol(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	data, err, HTTPCode := processEnroleRequestData(r)
 	if err != nil {
 		c.MFAServer.Loggers.Error.Println(err.Error())
@@ -39,6 +43,15 @@ func Enrole(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	if err != nil {
 		c.MFAServer.Loggers.Info.Printf("%s, OTP enrolement failed for %s/%s. LDAP authentication failed: %v", r.RemoteAddr, data.Domain, data.Username, err)
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if secrets.Exists(c, "/"+data.Issuer+"/"+data.Domain+"/"+data.Username, "mfa") {
+		c.MFAServer.Loggers.Info.Printf("%s, OTP enrolement failed for %s/%s as the user already has enroled.", r.RemoteAddr, data.Domain, data.Username)
+		w.WriteHeader(http.StatusForbidden)
+		d := messageResponseData{Message: "Forbidden - User already enroled"}
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		json.NewEncoder(w).Encode(d)
 		return
 	}
 

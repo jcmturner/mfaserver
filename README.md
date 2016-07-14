@@ -81,7 +81,7 @@ To start the MFA Server run this command:
 ## Use
 The MFA Server implements a simple API:
 
-* /enrole - create and store a new MFA secret for a user
+* /enrol - create and store a new MFA secret for a user
   * Request POST data:
   ```
   {
@@ -117,5 +117,4 @@ The MFA Server implements a simple API:
   * Not yet implemented
 
 ## Enhancements
-* Need to check the user has not already been enroled
-* Need to implement the update part of the API that will require the current OTP
+* Implement a delete capability
