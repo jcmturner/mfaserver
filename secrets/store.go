@@ -71,6 +71,22 @@ func Read(conf *config.Config, p string) (map[string]interface{}, error) {
 	return s.Data, err
 }
 
+func Delete(conf *config.Config, p string) error {
+	if !Exists(conf, p, "mfa") {
+		return errors.New("User does not exist in secrets store.")
+	}
+	if err := vaultClientLogin(conf); err != nil {
+		conf.MFAServer.Loggers.Error.Printf("Problem logging into the Vault during delete operation: %v\n", err)
+		return err
+	}
+	logical := conf.Vault.VaultClient.Logical()
+	_, err := logical.Delete(*conf.Vault.MFASecretsPath + p)
+	if err != nil {
+		conf.MFAServer.Loggers.Error.Printf("Issue when deleting secret from Vault at %s: %v\n", *conf.Vault.MFASecretsPath+p, err)
+	}
+	return err
+}
+
 func Exists(conf *config.Config, p string, k string) bool {
 	if err := vaultClientLogin(conf); err != nil {
 		conf.MFAServer.Loggers.Error.Printf("Problem logging into the Vault during list operation: %v\n", err)

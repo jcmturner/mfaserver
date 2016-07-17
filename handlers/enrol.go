@@ -15,14 +15,14 @@ import (
 	"net/url"
 )
 
-type enroleRequestData struct {
+type enrolRequestData struct {
 	Domain   string `json:"domain"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Issuer   string `json:"issuer"`
 }
 
-type enroleResponseData struct {
+type enrolResponseData struct {
 	Secret string `json:"secret"`
 }
 
@@ -31,7 +31,7 @@ type messageResponseData struct {
 }
 
 func Enrol(w http.ResponseWriter, r *http.Request, c *config.Config) {
-	data, err, HTTPCode := processEnroleRequestData(r)
+	data, err, HTTPCode := processEnrolRequestData(r)
 	if err != nil {
 		c.MFAServer.Loggers.Error.Println(err.Error())
 		w.WriteHeader(HTTPCode)
@@ -71,18 +71,20 @@ func Enrol(w http.ResponseWriter, r *http.Request, c *config.Config) {
 			return
 		}
 		w.Header().Set("Content-Type", "image/png")
+		w.WriteHeader(http.StatusCreated)
 		w.Write(img)
 	} else {
-		d := enroleResponseData{Secret: s}
+		d := enrolResponseData{Secret: s}
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(d); err != nil {
 			c.MFAServer.Loggers.Error.Printf("%s, OTP enrolement failed for %s/%s whilst returning body data: %v", r.RemoteAddr, data.Domain, data.Username, err)
 		}
 	}
 }
 
-func processEnroleRequestData(r *http.Request) (enroleRequestData, error, int) {
-	var data enroleRequestData
+func processEnrolRequestData(r *http.Request) (enrolRequestData, error, int) {
+	var data enrolRequestData
 	defer r.Body.Close()
 	var dec *json.Decoder
 	//Set limit to reading 1MB. Probably a bit large. Prevents DOS by posting large amount of data
@@ -97,8 +99,7 @@ func processEnroleRequestData(r *http.Request) (enroleRequestData, error, int) {
 	return data, nil, 0
 }
 
-func createAndStoreSecret(c *config.Config, data *enroleRequestData) (string, error) {
-	//TODO need to check the user does not already exist in vault
+func createAndStoreSecret(c *config.Config, data *enrolRequestData) (string, error) {
 	s, err := gootp.GenerateOTPSecret(32)
 	if err != nil {
 		return "", errors.New("Could not generate secret: " + err.Error())

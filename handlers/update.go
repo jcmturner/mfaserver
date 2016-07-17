@@ -26,7 +26,7 @@ func Update(w http.ResponseWriter, r *http.Request, c *config.Config) {
 		return
 	}
 
-	udata := enroleRequestData{Username: data.Username,
+	udata := enrolRequestData{Username: data.Username,
 		Domain:   data.Domain,
 		Issuer:   data.Issuer,
 		Password: data.Password}
@@ -48,7 +48,7 @@ func Update(w http.ResponseWriter, r *http.Request, c *config.Config) {
 		w.Header().Set("Content-Type", "image/png")
 		w.Write(img)
 	} else {
-		d := enroleResponseData{Secret: s}
+		d := enrolResponseData{Secret: s}
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		if err := json.NewEncoder(w).Encode(d); err != nil {
 			c.MFAServer.Loggers.Error.Printf("%s, OTP update failed for %s/%s whilst returning body data: %v", r.RemoteAddr, data.Domain, data.Username, err)

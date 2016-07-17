@@ -32,6 +32,9 @@ func main() {
 	mux.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
 		handlers.Update(w, r, c)
 	})
+	mux.HandleFunc("/delete", func(w http.ResponseWriter, r *http.Request) {
+		handlers.DeleteOTP(w, r, c)
+	})
 
 	c.MFAServer.Loggers.Info.Printf(`MFA Server - Configuration Complete:
 	Version: %s

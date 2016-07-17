@@ -38,7 +38,7 @@ func TestEnrolStatus(t *testing.T) {
 		Json     string
 		HttpCode int
 	}{
-		{`{"domain": "testdom", "username": "validuser", "password": "validpassword", "issuer": "testapp"}`, http.StatusOK},
+		{`{"domain": "testdom", "username": "validuser", "password": "validpassword", "issuer": "testapp"}`, http.StatusCreated},
 		// Try again to test the 2nd time we are forbidden to enrol
 		{`{"domain": "testdom", "username": "validuser", "password": "validpassword", "issuer": "testapp"}`, http.StatusForbidden},
 		{`{"domain": "testdom", "username": "validuser", "password": "invalidpassword", "issuer": "testapp"}`, http.StatusUnauthorized},
@@ -65,7 +65,7 @@ func TestEnrolStatus(t *testing.T) {
 		if resp.StatusCode == http.StatusOK {
 			defer resp.Body.Close()
 			var dec *json.Decoder
-			var j enroleResponseData
+			var j enrolResponseData
 			dec = json.NewDecoder(resp.Body)
 			err = dec.Decode(&j)
 			if err != nil {
@@ -99,8 +99,8 @@ func TestEnrolQRCode(t *testing.T) {
 	r, _ := http.NewRequest("POST", s.URL+"/enrol", bytes.NewBuffer([]byte(`{"domain": "testdom", "username": "validuser", "password": "validpassword", "issuer": "testapp"}`)))
 	r.Header.Set("Accept-Encoding", "image/png")
 	resp, err := http.DefaultClient.Do(r)
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected code %v, got %v for QR test", http.StatusOK, resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("Expected code %v, got %v for QR test", http.StatusCreated, resp.StatusCode)
 	}
 	if err != nil {
 		t.Errorf("Error returned from sending request: %v", err)

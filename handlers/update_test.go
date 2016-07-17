@@ -36,7 +36,7 @@ func TestUpdate(t *testing.T) {
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { Update(w, r, c) }))
 	defer s.Close()
 
-	udata := enroleRequestData{Username: "validuser",
+	udata := enrolRequestData{Username: "validuser",
 		Domain:   "testdom",
 		Issuer:   "testapp",
 		Password: "validpassword"}
@@ -79,7 +79,7 @@ func TestUpdate(t *testing.T) {
 		if resp.StatusCode == http.StatusOK {
 			defer resp.Body.Close()
 			var dec *json.Decoder
-			var j enroleResponseData
+			var j enrolResponseData
 			dec = json.NewDecoder(resp.Body)
 			err = dec.Decode(&j)
 			secret = j.Secret

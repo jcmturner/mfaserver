@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-func TestValidateOTP(t *testing.T) {
+func TestDeleteOTP(t *testing.T) {
 	//Set up mock LDAP server
 	l := testtools.NewLDAPServer(t)
 	defer l.Stop()
@@ -31,7 +31,7 @@ func TestValidateOTP(t *testing.T) {
 	c.MFAServer.Loggers.Warning = log.New(os.Stdout, "MFA Warn: ", log.Ldate|log.Ltime|log.Lshortfile)
 	c.MFAServer.Loggers.Error = log.New(os.Stderr, "MFA Error: ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { ValidateOTP(w, r, c) }))
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { DeleteOTP(w, r, c) }))
 	defer s.Close()
 
 	udata := enrolRequestData{Username: "validuser",
@@ -73,5 +73,6 @@ func TestValidateOTP(t *testing.T) {
 		if resp.StatusCode != test.HttpCode {
 			t.Errorf("Expected code %v, got %v for post data %v", test.HttpCode, resp.StatusCode, test.Json)
 		}
+		secret, _ = createAndStoreSecret(c, &udata)
 	}
 }

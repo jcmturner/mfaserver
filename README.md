@@ -92,6 +92,7 @@ The MFA Server implements a simple API:
   }
   ```
   * Response data:
+    If successful the HTTP status code is 201 (Created).
     If the "Accept-Encoding" header value is set to "image/png" then a png QR code image is returned suitable for use with the Google Authenticator application.
     Else the following JSON is returned:
   ```
@@ -126,6 +127,20 @@ The MFA Server implements a simple API:
   ```
   * Response:
   This is the same as the enrol function above.
+* /delete - delete the MFA secret for an existing user
+  * Request POST data:
+  ```
+  {
+    "issuer": "issuer",
+    "domain": "domainname",
+    "username": "username",
+    "password": "password",
+    "otp": "123456"
+  }
+  ```
+  * Response:
+      * HTTP response code 204 - indicates the MFA secret has been deleted.
+      * HTTP response code 401 - indicates that authentication did not succeed to be able to delete the MFA secret.
 
 ### Example Usage Commands
 * Enrol - getting QR code
@@ -138,7 +153,11 @@ curl -w "%{http_code}" -X POST -d '{"issuer": "testapp", "domain": "testdom", "u
 ```
 * Update
 ```
-curl -o test.png -H "Accept-Encoding: image/png" -X POST -d '{"domain": "testdom", "username": "bob", "password": "bobpass", "issuer": "testapp"}' -w "%{http_code}" https://127.0.0.1:8443/update
+curl -o test.png -H "Accept-Encoding: image/png" -X POST -d '{"domain": "testdom", "username": "bob", "password": "bobpass", "issuer": "testapp", "otp":"123456"}' -w "%{http_code}" https://127.0.0.1:8443/update
+```
+* Delete
+```
+curl -X POST -d '{"domain": "testdom", "username": "bob", "password": "bobpass", "issuer": "testapp", "otp":"123456"}' -w "%{http_code}" https://127.0.0.1:8443/delete
 ```
 ## Enhancements
-* Implement a delete capability
+* Administrator delete function
