@@ -46,9 +46,9 @@ func processValidateRequestData(r *http.Request) (validateRequestData, error, in
 	err := dec.Decode(&data)
 	if err != nil {
 		//We should fail safe
-		return data, errors.New(fmt.Sprintf("%s, Could not parse data posted from client : %v", r.RemoteAddr, err)), http.StatusUnauthorized
+		return data, errors.New(fmt.Sprintf("%s, Could not parse data posted from client : %v", r.RemoteAddr, err)), http.StatusBadRequest
 	}
-	if data.Domain == "" || data.Username == "" || data.OTP == "" || data.Issuer == "" {
+	if data.Domain == "" || data.Username == "" || data.Password == "" || data.OTP == "" || data.Issuer == "" {
 		return data, errors.New(fmt.Sprintf("%s, Could not extract values correctly from the validation request.", r.RemoteAddr)), http.StatusBadRequest
 	}
 	return data, nil, 0
@@ -83,7 +83,7 @@ func twoFactorAuthenticate(c *config.Config, r *http.Request, data *validateRequ
 
 func checkOTP(c *config.Config, data *validateRequestData) (bool, error) {
 	m, err := secrets.Read(c, "/"+data.Issuer+"/"+data.Domain+"/"+data.Username)
-	if err != nil {
+	if err != nil || m == nil {
 		return false, err
 	}
 	s := m["mfa"].(string)

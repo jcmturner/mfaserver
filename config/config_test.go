@@ -17,7 +17,7 @@ func TestConfig_NewConfig(t *testing.T) {
 	c := NewConfig()
 	assert.IsType(t, &Config{}, c, "Object is not a config type")
 	assert.Equal(t, "0.0.0.0:8443", *c.MFAServer.ListenerSocket, "Default listener socket not as expected")
-	assert.Equal(t, "secrets/mfa", *c.Vault.MFASecretsPath, "Default secrets path in vault not as expected")
+	assert.Equal(t, "secret/mfa", *c.Vault.MFASecretsPath, "Default secrets path in vault not as expected")
 }
 
 func TestConfig_WithVaultEndPoint(t *testing.T) {

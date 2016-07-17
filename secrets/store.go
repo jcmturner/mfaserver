@@ -10,15 +10,19 @@ import (
 func vaultClientLogin(conf *config.Config) error {
 	conf.MFAServer.Loggers.Debug.Println("Call to get login token to the Vault")
 	if conf.Vault.VaultLogin == nil {
-		conf.MFAServer.Loggers.Debug.Println("No cached login token, will perform new login request to the Vault")
+		conf.MFAServer.Loggers.Debug.Println("No cached login token, will perform new login request to the Vault.")
 		var l vault.Login
-		l.NewRequest(conf.Vault.VaultReSTClientConfig, *conf.Vault.AppIDWrite, *conf.Vault.UserID)
+		err := l.NewRequest(conf.Vault.VaultReSTClientConfig, *conf.Vault.AppIDWrite, *conf.Vault.UserID)
+		if err != nil {
+			return errors.New("Error creating vault login request: " + err.Error())
+		}
 		conf.Vault.VaultLogin = &l
 	}
 	token, err := conf.Vault.VaultLogin.GetToken()
 	if err != nil {
 		return errors.New("Error getting login token to the Vault: " + err.Error())
 	}
+	conf.MFAServer.Loggers.Debug.Println("Retrieved token for Vault access")
 	if conf.Vault.VaultClient == nil {
 		//There has never been a client created
 		conf.MFAServer.Loggers.Debug.Println("Creating new Vault client object")
@@ -60,6 +64,9 @@ func Read(conf *config.Config, p string) (map[string]interface{}, error) {
 	s, err := logical.Read(*conf.Vault.MFASecretsPath + p)
 	if err != nil {
 		conf.MFAServer.Loggers.Error.Printf("Issue when reading secret from Vault at %s: %v\n", *conf.Vault.MFASecretsPath+p, err)
+	}
+	if s == nil {
+		return nil, err
 	}
 	return s.Data, err
 }

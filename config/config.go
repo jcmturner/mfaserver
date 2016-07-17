@@ -74,7 +74,7 @@ type Loggers struct {
 }
 
 func NewConfig() *Config {
-	defSecPath := "secrets/mfa"
+	defSecPath := "secret/mfa"
 	defSocket := "0.0.0.0:8443"
 	dl := log.New(ioutil.Discard, "", os.O_APPEND)
 	return &Config{
@@ -312,6 +312,13 @@ func stringInSlice(a string, list []string) bool {
 		}
 	}
 	return false
+}
+
+func (c *Config) WithLDAPConnection(e, ca, dn string) {
+	c.LDAP.EndPoint = &e
+	c.LDAP.TrustCACert = &ca
+	c.LDAP.UserDN = &dn
+	c.createLDAPConnection()
 }
 
 func (c *Config) createLDAPConnection() error {
