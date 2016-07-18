@@ -14,6 +14,9 @@ func NewLDAPServer(t *testing.T) *ldap.Server {
 		handleBind(w, m, t)
 	})
 	server.Handle(routes)
+	routes.Search(func(w ldap.ResponseWriter, m *ldap.Message) {
+		handleSearch(w, m, t)
+	})
 
 	// listen on 10389
 	go server.ListenAndServe("127.0.0.1:0")
@@ -39,5 +42,17 @@ func handleBind(w ldap.ResponseWriter, m *ldap.Message, t *testing.T) {
 		res.SetResultCode(ldap.LDAPResultUnwillingToPerform)
 		res.SetDiagnosticMessage("LDAP Server: Authentication choice not supported")
 	}
+	w.Write(res)
+}
+
+func handleSearch(w ldap.ResponseWriter, m *ldap.Message, t *testing.T) {
+	r := m.GetSearchRequest()
+	t.Logf("Test LDAP search")
+	e := ldap.NewSearchResultEntry("cn=mfaadmin, " + string(r.BaseObject()))
+	e.AddAttribute("cn", "mfaadmin")
+	e.AddAttribute("memberUid", "validuser", "validadmin")
+	w.Write(e)
+
+	res := ldap.NewSearchResultDoneResponse(ldap.LDAPResultSuccess)
 	w.Write(res)
 }

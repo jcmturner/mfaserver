@@ -23,7 +23,7 @@ type validateRequestData struct {
 
 func ValidateOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	//Process the request data
-	data, err, HTTPCode := processValidateRequestData(r)
+	data, err, HTTPCode := processValidateRequestData(r, false)
 	if err != nil {
 		c.MFAServer.Loggers.Error.Println(err.Error())
 		w.WriteHeader(HTTPCode)
@@ -36,7 +36,7 @@ func ValidateOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	return
 }
 
-func processValidateRequestData(r *http.Request) (validateRequestData, error, int) {
+func processValidateRequestData(r *http.Request, admin bool) (validateRequestData, error, int) {
 	//Process the JSON body
 	var data validateRequestData
 	defer r.Body.Close()
@@ -48,7 +48,10 @@ func processValidateRequestData(r *http.Request) (validateRequestData, error, in
 		//We should fail safe
 		return data, errors.New(fmt.Sprintf("%s, Could not parse data posted from client : %v", r.RemoteAddr, err)), http.StatusBadRequest
 	}
-	if data.Domain == "" || data.Username == "" || data.Password == "" || data.OTP == "" || data.Issuer == "" {
+	if data.Domain == "" || data.Username == "" || data.Issuer == "" {
+		return data, errors.New(fmt.Sprintf("%s, Could not extract values correctly from the validation request.", r.RemoteAddr)), http.StatusBadRequest
+	}
+	if !admin && (data.Password == "" || data.OTP == "") {
 		return data, errors.New(fmt.Sprintf("%s, Could not extract values correctly from the validation request.", r.RemoteAddr)), http.StatusBadRequest
 	}
 	return data, nil, 0

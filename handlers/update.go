@@ -9,7 +9,7 @@ import (
 )
 
 func Update(w http.ResponseWriter, r *http.Request, c *config.Config) {
-	data, err, HTTPCode := processValidateRequestData(r)
+	data, err, HTTPCode := processValidateRequestData(r, false)
 	if err != nil {
 		c.MFAServer.Loggers.Error.Println(err.Error())
 		w.WriteHeader(HTTPCode)

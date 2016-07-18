@@ -38,7 +38,10 @@ Below is an example JSON configuration for the MFA server. It includes all avail
   "LDAP": {
     "EndPoint": "ldaps://192.168.1.200:636",
     "TrustCACert": "/path/to/trustedcert.pem",
-    "UserDN": "uid={username},ou=users,dc=example,dc=com"
+    "UserDN": "uid={username},ou=users,dc=example,dc=com",
+    "AdminGroupDN": "cn=mfaadmin,ou=groups,dc=example,dc=com"
+    "AdminGroupMembershipAttribute": "memberUid"
+    "AdminGroupMemberDNFormat": "{username}"
   }
 }
 ```

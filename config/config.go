@@ -42,10 +42,13 @@ type VaultConf struct {
 }
 
 type LDAPConf struct {
-	EndPoint       *string `json:"EndPoint"`
-	TrustCACert    *string `json:"TrustCACert"`
-	UserDN         *string `json:"UserDN"`
-	LDAPConnection *ldap.LDAPConnection
+	EndPoint            *string `json:"EndPoint"`
+	TrustCACert         *string `json:"TrustCACert"`
+	UserDN              *string `json:"UserDN"`
+	AdminGroupDN        *string `json:"AdminGroupDN"`
+	AdminMembershipAttr *string `json:"AdminGroupMembershipAttribute"`
+	AdminMemberUserDN   *string `json:"AdminGroupMemberDNFormat"`
+	LDAPConnection      *ldap.LDAPConnection
 }
 
 type UserIdFile struct {
@@ -319,6 +322,13 @@ func (c *Config) WithLDAPConnection(e, ca, dn string) {
 	c.LDAP.TrustCACert = &ca
 	c.LDAP.UserDN = &dn
 	c.createLDAPConnection()
+}
+
+func (c *Config) WithLDAPAdminSettings(gdn, attr, m string) {
+	c.LDAP.AdminGroupDN = &gdn
+	c.LDAP.AdminMembershipAttr = &attr
+	//TODO check that the following includes "{username}"
+	c.LDAP.AdminMemberUserDN = &m
 }
 
 func (c *Config) createLDAPConnection() error {
