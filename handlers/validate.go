@@ -24,6 +24,7 @@ type validateRequestData struct {
 func ValidateOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	//Process the request data
 	data, err, HTTPCode := processValidateRequestData(r, false)
+	setNoCacheHeaders(w)
 	if err != nil {
 		c.MFAServer.Loggers.Error.Println(err.Error())
 		w.WriteHeader(HTTPCode)
@@ -99,4 +100,10 @@ func checkOTP(c *config.Config, data *validateRequestData) (bool, error) {
 	}
 	//Fail safe
 	return false, nil
+}
+
+func setNoCacheHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 }

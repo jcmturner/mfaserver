@@ -15,6 +15,7 @@ func DeleteOTP(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	//Process the request data
 	admin := checkAdminAuth(c, r)
 	data, err, HTTPCode := processValidateRequestData(r, admin)
+	setNoCacheHeaders(w)
 	if err != nil {
 		c.MFAServer.Loggers.Error.Println(err.Error())
 		w.WriteHeader(HTTPCode)

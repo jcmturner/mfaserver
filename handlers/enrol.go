@@ -32,6 +32,7 @@ type messageResponseData struct {
 
 func Enrol(w http.ResponseWriter, r *http.Request, c *config.Config) {
 	data, err, HTTPCode := processEnrolRequestData(r)
+	setNoCacheHeaders(w)
 	if err != nil {
 		c.MFAServer.Loggers.Error.Println(err.Error())
 		w.WriteHeader(HTTPCode)
