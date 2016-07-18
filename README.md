@@ -3,7 +3,7 @@
 Enrole and validate users with one-time passwords based on RFC 6238 (TOTP).
 The MFA Server implements a ReST interface for applications to consume in order to add multi-factor authentication security.
 
-The MFA server can enrole a user, storing a unique TOTP secret for each use in a Hashicorp Vault instance. Calls to the ReST API can then also be used to validate a one time password provided for that user.
+The MFA server can enrole a user, storing a unique TOTP secret for each user in a Hashicorp Vault instance. Calls to the ReST API can then also be used to validate a one time password provided for that user.
 
 ## Prerequisites
 Hashicorp Vault (https://www.vaultproject.io/) is needed as the backend store for the MFA secrets. The Vault instance will need to implement AppId authentication (https://www.vaultproject.io/docs/auth/app-id.html).
@@ -66,6 +66,9 @@ The configuration keys are explained below
   * EndPoint: The URL endpoint of the LDAP server.
   * TrustCACert: The certificate to trust that signed the server certificate of the LDAP server. Required if ldaps:// is used to connect to the LDAP server.
   * UserDN: The full LDAP distinguished name (DN) to bind to LDAP with using "{username}" to indicate where the username provided should be inserted.
+  * AdminGroupDN: The DN of the group in LDAP that contains administrator users.
+  * AdminGroupMembershipAttribute: The LDAP attribute of the admin group that contains the group members.
+  * AdminGroupMemberDNFormat: The format of the values of the membership attribute using "{username}" to indicate where the username provided should be inserted.
 
 #### UserID File
 If using a UserID file it should have this format:
@@ -130,8 +133,8 @@ The MFA Server implements a simple API:
   ```
   * Response:
   This is the same as the enrol function above.
-* /delete - delete the MFA secret for an existing user
-  * Request POST data:
+* /delete - delete the MFA secret for an existing user.
+  * Request POST data (non-admin):
   ```
   {
     "issuer": "issuer",
@@ -141,6 +144,15 @@ The MFA Server implements a simple API:
     "otp": "123456"
   }
   ```
+  * Request POST data (admin)
+  ```
+  {
+    "issuer": "issuer",
+    "domain": "domainname",
+    "username": "username",
+  }
+  ```
+  For an administrative delete, basic authentication details of an administrator must be provided.
   * Response:
       * HTTP response code 204 - indicates the MFA secret has been deleted.
       * HTTP response code 401 - indicates that authentication did not succeed to be able to delete the MFA secret.
@@ -162,5 +174,3 @@ curl -o test.png -H "Accept-Encoding: image/png" -X POST -d '{"domain": "testdom
 ```
 curl -X POST -d '{"domain": "testdom", "username": "bob", "password": "bobpass", "issuer": "testapp", "otp":"123456"}' -w "%{http_code}" https://127.0.0.1:8443/delete
 ```
-## Enhancements
-* Administrator delete function
